@@ -1,48 +1,67 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
 
 export async function POST(request) {
   // Allow CORS for all origins
   const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Content-Type': 'application/json',
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Content-Type": "application/json",
   };
 
   // Handle preflight requests
-  if (request.method === 'OPTIONS') {
+  if (request.method === "OPTIONS") {
     return new NextResponse(null, { headers });
   }
 
   try {
-    const { text, model = 'mistral-small' } = await request.json();
+    const {
+      text,
+      model = "gpt-oss-120b",
+      temperature = 0.7,
+      max_tokens = 512,
+    } = await request.json();
 
-    const mistralResponse = await fetch('https://api.mistral.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: `Transliterate the following text to English letters. Return ONLY the transliterated string, with no additional text, explanations, or formatting: ${text}` }],
-      }),
-    });
-
-    if (!mistralResponse.ok) {
-      const errorData = await mistralResponse.json();
+    const cerebras = await fetch(
+      "https://api.cerebras.ai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.CEREBRAS_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "user",
+              content: `Transliterate the following text to English letters. Return ONLY the transliterated string, with no additional text, explanations, or formatting: ${text}`,
+            },
+          ],
+          temperature,
+          max_tokens,
+        }),
+      }
+    );
+    console.log("respomse", cerebras);
+    if (!cerebras.ok) {
+      const errorData = await cerebras.json();
       return NextResponse.json(
-        { error: errorData.error || 'Failed to fetch from Mistral API' },
-        { status: mistralResponse.status, headers }
+        { error: errorData.error || "Failed to fetch from Mistral API" },
+        { status: cerebras.status, headers }
       );
     }
 
-    const data = await mistralResponse.json();
-    return NextResponse.json({translitrated:data?.choices[0]?.message?.content||text,data:data}, { headers });
+    const data = await cerebras.json();
+    const answer = data?.choices?.[0]?.message?.content?.trim() ?? text;
 
+    return NextResponse.json(
+      { translitrated: answer || text, data: data },
+      { headers }
+    );
   } catch (error) {
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: error.message || "Internal server error" },
       { status: 500, headers }
     );
   }
